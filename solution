@@ -1,0 +1,69 @@
+-- What is the total amount each customer spent at the restaurant?
+select s.customer_id ,sum(m.price) from menu as m join sales as s on m.product_id =s.product_id  group by 1;
+
+-- How many days has each customer visited the restaurant?
+select customer_id, sum(day(order_date)) from sales group by 1;
+
+-- What was the first item from the menu purchased by each customer?
+with cte as (
+select s.customer_id,m.product_name ,row_number() over (partition by customer_id order by order_date) as roww
+ from sales as s join menu as m on s.product_id=m.product_id) select customer_id,product_name from cte where roww = 1;
+
+ -- What is the most purchased item on the menu and how many times was it purchased by all customers?
+WITH cte AS (
+    SELECT 
+        m.product_name, 
+        COUNT(s.product_id) AS count
+    FROM 
+        sales AS s
+    JOIN 
+        menu AS m 
+    ON 
+        s.product_id = m.product_id
+    GROUP BY 
+        m.product_name
+    ORDER BY 
+        count DESC
+    LIMIT 1
+)
+SELECT 
+    s.customer_id, 
+    COUNT(s.product_id) AS total_purchase
+FROM 
+    sales AS s
+JOIN 
+    menu AS m 
+ON 
+    s.product_id = m.product_id
+WHERE 
+    m.product_name IN (SELECT product_name FROM cte)
+GROUP BY 
+    s.customer_id
+ORDER BY 
+    total_purchase DESC;
+    
+ -- Which item was the most popular for each customer?   
+  with cte as (
+  select s.customer_id ,m.product_name , row_number () over ( partition by customer_id order by count(*) desc) as t from menu as m join sales as s
+  on m.product_id =s.product_id group by 1,2 ) select customer_id ,product_name from cte where t=1;
+     
+ 
+-- Which item was purchased first by the customer after they became a member?
+with cte as (
+select s.customer_id , m.product_name ,row_number() over(partition by s.customer_id order by order_date) as t from sales as s  join menu as m  on m.product_id =s.product_id  
+join members as mb on s.customer_id =mb.customer_id where order_date >=join_date) select customer_id ,product_name from cte where t=1;
+
+-- What is the total items and amount spent for each member before they became a member?
+select s.customer_id ,sum(m.price) from sales as s  join menu as m  on m.product_id =s.product_id  
+left join members as mb on s.customer_id =mb.customer_id where order_date <join_date or join_date is null group by 1;
+
+-- If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
+select s.customer_id,sum( case when product_name ="sushi" then price *20 else price*10 end )as t from sales as s  join menu as m  on m.product_id =s.product_id  
+group by 1;
+
+-- In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do 
+-- customer A and B have at the end of January?
+with cte as(
+ select s.customer_id,order_date,join_date,date_add(join_date,interval 7 day) as f ,price from  sales as s  join menu as m  on m.product_id =s.product_id  
+join members as mb on s.customer_id =mb.customer_id where order_date >=join_date  and order_date between "2021-01-01" and "2021-01-31")
+select customer_id ,sum(case when order_date >=join_date and order_date <f then price*20 else price*10 end )as t from cte group by 1
